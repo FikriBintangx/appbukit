@@ -452,8 +452,9 @@ class FirestoreService {
     String adminId,
     String adminName,
     int jumlah,
-    String alasan,
-  ) async {
+    String alasan, {
+    String? buktiUrl,
+  }) async {
     final now = DateTime.now();
     final periode = "${now.month.toString().padLeft(2, '0')}-${now.year}";
 
@@ -465,7 +466,7 @@ class FirestoreService {
       'tipe': 'pengeluaran',
       'timestamp': Timestamp.now(),
       'deskripsi': alasan,
-      'bukti_gambar': null,
+      'bukti_gambar': buktiUrl,
       'status': 'sukses',
       'periode': periode,
     });
@@ -717,6 +718,7 @@ class AuthService {
     String password, {
     String blok = '',
     String noRumah = '',
+    String noHp = '',
   }) async {
     try {
       final query = await _db
@@ -732,6 +734,7 @@ class AuthService {
         'role': 'user',
         'blok': blok,
         'no_rumah': noRumah,
+        'no_hp': noHp,
         'created_at': Timestamp.now(),
       });
       return null;

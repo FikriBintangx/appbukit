@@ -154,6 +154,11 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showKentonganDialog(context),
+        backgroundColor: AppColors.danger,
+        child: const Icon(Icons.notifications_active, color: Colors.white),
+      ),
       body: SafeArea(
         child: SmartRefresher(
           controller: _refreshController,
@@ -548,6 +553,109 @@ class _BerandaScreenState extends State<BerandaScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showKentonganDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.campaign, color: Colors.red),
+            SizedBox(width: 8),
+            Text("Kentongan Digital"),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Gunakan fitur ini HANYA untuk keadaan darurat!\nAdmin dan warga lain akan menerima notifikasi.",
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            Text(
+              "Pilih Jenis Darurat:",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildKentonganButton(
+                ctx,
+                "Maling",
+                Icons.local_police,
+                Colors.black,
+              ),
+              _buildKentonganButton(
+                ctx,
+                "Kebakaran",
+                Icons.local_fire_department,
+                Colors.red,
+              ),
+              _buildKentonganButton(
+                ctx,
+                "Medis",
+                Icons.medical_services,
+                Colors.green,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKentonganButton(
+    BuildContext ctx,
+    String label,
+    IconData icon,
+    Color color,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () {
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("🚨 Sinyal Bahaya '$label' Dikirim!"),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+            // TODO: Integrasi Notifikasi FCM
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Icon(icon, color: color, size: 32),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 

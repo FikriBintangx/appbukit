@@ -613,6 +613,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   _showAddPengumumanDialog(context);
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.money_off, color: AppColors.danger),
+                title: const Text('Catat Pengeluaran'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAddPengeluaranDialog(context);
+                },
+              ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.restore, color: AppColors.danger),
@@ -687,6 +695,159 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _showAddPengeluaranDialog(BuildContext context) {
+    final jumlahCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    File? selectedImage;
+    bool isUploading = false;
+    final ImagePicker picker = ImagePicker();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text("Catat Pengeluaran"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: jumlahCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "Jumlah Pengeluaran (Rp)",
+                    border: OutlineInputBorder(),
+                    prefixText: 'Rp ',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(
+                    labelText: "Keterangan",
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () async {
+                    final XFile? image = await picker.pickImage(
+                      source: ImageSource.gallery,
+                    );
+                    if (image != null) {
+                      setState(() {
+                        selectedImage = File(image.path);
+                      });
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.grey[100],
+                    ),
+                    child: selectedImage != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              selectedImage!,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.camera_alt,
+                                color: Colors.grey,
+                                size: 40,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                "Upload Struk/Bukti",
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+                if (isUploading) ...[
+                  const SizedBox(height: 16),
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Mengupload bukti...",
+                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isUploading ? null : () => Navigator.pop(ctx),
+              child: const Text("Batal"),
+            ),
+            ElevatedButton(
+              onPressed: isUploading
+                  ? null
+                  : () async {
+                      if (jumlahCtrl.text.isNotEmpty &&
+                          descCtrl.text.isNotEmpty) {
+                        setState(() => isUploading = true);
+
+                        try {
+                          String? uploadedUrl;
+                          if (selectedImage != null) {
+                            uploadedUrl = await _supabase.uploadImage(
+                              selectedImage!,
+                            );
+                          }
+
+                          if (_currentAdmin != null) {
+                            await _fs.tambahPengeluaranAdmin(
+                              _currentAdmin!.id,
+                              _currentAdmin!.nama,
+                              int.parse(jumlahCtrl.text),
+                              descCtrl.text,
+                              buktiUrl: uploadedUrl,
+                            );
+
+                            Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "✅ Pengeluaran berhasil dicatat!",
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          setState(() => isUploading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("❌ Gagal: $e")),
+                          );
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Simpan"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -768,6 +929,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final noRumahCtrl = TextEditingController();
+    final noHpCtrl = TextEditingController(); // Added
     String selectedBlok = 'Q1';
     final List<String> blokList = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'];
 
@@ -792,6 +954,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   controller: emailCtrl,
                   decoration: const InputDecoration(
                     labelText: "Email",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noHpCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: "No. HP (WhatsApp)",
+                    hintText: "Contoh: 628123456789",
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -863,6 +1035,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     generatedPass,
                     blok: selectedBlok,
                     noRumah: noRumahCtrl.text,
+                    noHp: noHpCtrl.text,
                   );
                   Navigator.pop(ctx);
                   if (context.mounted) {
@@ -1283,23 +1456,69 @@ class _AdminTransaksiScreenState extends State<AdminTransaksiScreen> {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            item.status.toUpperCase(),
-                            style: TextStyle(
-                              color: statusColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                item.status.toUpperCase(),
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (item.status == 'sukses' &&
+                                item.tipe == 'pemasukan')
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.share,
+                                  color: Colors.green,
+                                ),
+                                tooltip: 'Kirim Kwitansi WA',
+                                onPressed: () async {
+                                  // Share receipt
+                                  final text =
+                                      "Kwitansi Digital Tiara Finance\n\n"
+                                      "Telah terima dari: ${item.userName}\n"
+                                      "Sejumlah: ${Utils.formatCurrency(item.uang)}\n"
+                                      "Untuk: ${item.deskripsi}\n"
+                                      "Tanggal: ${Utils.formatDateTime(item.timestamp)}\n"
+                                      "Status: LUNAS\n\n"
+                                      "Terima kasih.";
+
+                                  // Encode for URL
+                                  final url = Uri.parse(
+                                    "https://wa.me/?text=${Uri.encodeComponent(text)}",
+                                  );
+
+                                  if (await canLaunchUrl(url)) {
+                                    await launchUrl(url);
+                                  } else {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            "Tidak bisa membuka WhatsApp",
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -1902,8 +2121,24 @@ class AdminUserScreen extends StatelessWidget {
                           icon: const Icon(Icons.message, color: Colors.green),
                           tooltip: 'Chat WA',
                           onPressed: () async {
+                            if (u.noHp.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "❌ No HP user ini belum diatur",
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            var phone = u.noHp;
+                            if (phone.startsWith('0')) {
+                              phone = '62${phone.substring(1)}';
+                            }
+
                             final url = Uri.parse(
-                              "https://wa.me/?text=Halo ${u.nama}, mohon cek aplikasi Tiara Fin.",
+                              "https://wa.me/$phone?text=Halo ${u.nama}, mohon cek aplikasi Tiara Fin.",
                             );
                             if (await canLaunchUrl(url)) {
                               await launchUrl(url);

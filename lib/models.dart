@@ -8,6 +8,7 @@ class UserModel {
   final String role;
   final String blok;
   final String noRumah;
+  final String noHp;
 
   UserModel({
     required this.id,
@@ -17,6 +18,7 @@ class UserModel {
     required this.role,
     this.blok = '',
     this.noRumah = '',
+    this.noHp = '',
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String id) {
@@ -28,6 +30,7 @@ class UserModel {
       role: map['role'] ?? 'user',
       blok: map['blok'] ?? '',
       noRumah: map['no_rumah'] ?? '',
+      noHp: map['no_hp'] ?? '',
     );
   }
 
@@ -39,6 +42,7 @@ class UserModel {
       'role': role,
       'blok': blok,
       'no_rumah': noRumah,
+      'no_hp': noHp,
     };
   }
 }
