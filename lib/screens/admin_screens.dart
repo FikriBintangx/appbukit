@@ -1890,277 +1890,338 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              left: 20, 
-              right: 20, 
-              top: 10
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Drag Handle
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text("Filter Laporan", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 24),
-
-                // 1. Filter Tanggal
-                const Text("Periode Waktu", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
-                const SizedBox(height: 10),
-                
-                // Quick Date Chips
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildQuickDateChip("Semua", null, selectedDateRange, (r) => setState(() => selectedDateRange = r)),
-                      const SizedBox(width: 8),
-                      _buildQuickDateChip("Bulan Ini", 
-                        DateTimeRange(start: DateTime(DateTime.now().year, DateTime.now().month, 1), end: DateTime.now()), 
-                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
-                      ),
-                      const SizedBox(width: 8),
-                      _buildQuickDateChip("Bulan Lalu", 
-                        DateTimeRange(
-                          start: DateTime(DateTime.now().year, DateTime.now().month - 1, 1), 
-                          end: DateTime(DateTime.now().year, DateTime.now().month, 0)
-                        ), 
-                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
-                      ),
-                       const SizedBox(width: 8),
-                      _buildQuickDateChip("Tahun Ini", 
-                        DateTimeRange(start: DateTime(DateTime.now().year, 1, 1), end: DateTime.now()), 
-                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                
-                // Manual Date Picker
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                      initialDateRange: selectedDateRange,
-                      builder: (context, child) {
-                          return Theme(
-                          data: Theme.of(context).copyWith(
-                            colorScheme: const ColorScheme.light(
-                              primary: AppColors.primary,
-                              onPrimary: Colors.white,
-                            ),
-                          ),
-                          child: child!,
-                        );
-                      }
+          // New State for Mode
+          String filterMode = 'bulanan'; // 'bulanan', 'tahunan', 'custom'
+          // We need to persist state inside the StatefulBuilder of the BottomSheet
+          // Wait, 'filterMode' needs to be outside or initialized here. 
+          // Since it's a new open, initializing here is fine.
+          return _PdfFilterSheet(
+              onApply: (status, type, range) async {
+                  Navigator.pop(ctx);
+                  
+                  // Generete PDF Logic
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyiapkan PDF...")));
+                  }
+                  
+                  try {
+                    // Use 'widget.currentUser' or similar if needed, but '_fs' should be available in State
+                    // If _fs is not available, instantiate it.
+                    final FirestoreService fs = FirestoreService();
+                    final snapshot = await fs.getTransaksiList().first;
+                    
+                    await PdfService().exportLaporan(
+                      snapshot, 
+                      filterStatus: status,
+                      filterType: type,
+                      startDate: range?.start,
+                      endDate: range?.end,
                     );
-                    if (picked != null) {
-                      setState(() => selectedDateRange = picked);
+                    
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
                     }
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.05),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_month_rounded, color: AppColors.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Tanggal Dipilih",
-                                style: TextStyle(fontSize: 11, color: AppColors.primary.withOpacity(0.8), fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                selectedDateRange == null 
-                                  ? "Semua Waktu" 
-                                  : "${Utils.formatDate(selectedDateRange!.start)} - ${Utils.formatDate(selectedDateRange!.end)}",
-                                style: const TextStyle(
-                                  fontSize: 15, 
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.dark
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.primary, size: 14),
-                      ],
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-
-                // 2. Filter Tipe & Status Row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                     Expanded(
-                       child: Column(
-                         crossAxisAlignment: CrossAxisAlignment.start,
-                         children: [
-                            const Text("Tipe Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8, runSpacing: 8,
-                              children: [
-                                 _buildChoiceChip("Semua", selectedType == 'semua', (b) => setState(() => selectedType = 'semua')),
-                                 _buildChoiceChip("Masuk", selectedType == 'pemasukan', (b) => setState(() => selectedType = 'pemasukan'), color: Colors.green),
-                                 _buildChoiceChip("Keluar", selectedType == 'pengeluaran', (b) => setState(() => selectedType = 'pengeluaran'), color: Colors.red),
-                              ],
-                            )
-                         ],
-                       ),
-                     ),
-                  ],
-                ),
-                 const SizedBox(height: 20),
-                 const Text("Status Pembayaran", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
-                 const SizedBox(height: 10),
-                 SingleChildScrollView(
-                   scrollDirection: Axis.horizontal,
-                   child: Row(
-                      children: [
-                        _buildChoiceChip('Semua', selectedStatus == 'semua', (b) => setState(() => selectedStatus = 'semua')),
-                        const SizedBox(width: 8),
-                        _buildChoiceChip('Sukses', selectedStatus == 'sukses', (b) => setState(() => selectedStatus = 'sukses'), color: Colors.green),
-                        const SizedBox(width: 8),
-                        _buildChoiceChip('Menunggu', selectedStatus == 'menunggu', (b) => setState(() => selectedStatus = 'menunggu'), color: Colors.orange),
-                        const SizedBox(width: 8),
-                         _buildChoiceChip('Gagal', selectedStatus == 'gagal', (b) => setState(() => selectedStatus = 'gagal'), color: Colors.red),
-                      ],
-                   ),
-                 ),
-
-                const SizedBox(height: 40),
-
-                // Action Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: () {
-                       Navigator.pop(ctx); 
-                       _generatePdf(context, selectedStatus, selectedType, selectedDateRange);
-                    },
-                    style: ElevatedButton.styleFrom(
-                       backgroundColor: AppColors.primary,
-                       foregroundColor: Colors.white,
-                       elevation: 0,
-                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
-                    ),
-                    child: const Text("Terapkan & Cetak PDF", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
+                  } catch (e) {
+                     if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal export: $e")));
+                    }
+                  }
+              },
+              initialStatus: selectedStatus,
+              initialType: selectedType,
           );
         }
       ),
     );
+  } // End of _exportPdf
+
+} // End of _AdminMainScreenState
+
+// Helper Widget for PDF Filter Sheet to manage state cleanly
+class _PdfFilterSheet extends StatefulWidget {
+  final Function(String, String, DateTimeRange?) onApply;
+  final String initialStatus;
+  final String initialType;
+
+  const _PdfFilterSheet({required this.onApply, required this.initialStatus, required this.initialType});
+
+  @override
+  State<_PdfFilterSheet> createState() => _PdfFilterSheetState();
+}
+
+class _PdfFilterSheetState extends State<_PdfFilterSheet> {
+  String filterMode = 'bulanan'; // bulanan, tahunan, custom
+  int selectedYear = DateTime.now().year;
+  int selectedMonth = DateTime.now().month;
+  DateTimeRange? customRange;
+  
+  late String selectedStatus;
+  late String selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedStatus = widget.initialStatus;
+    selectedType = widget.initialType;
   }
 
-  Widget _buildQuickDateChip(String label, DateTimeRange? range, DateTimeRange? currentRange, Function(DateTimeRange?) onSelect) {
-    bool isSelected = false;
-    if (range == null && currentRange == null) {
-      isSelected = true;
-    } else if (range != null && currentRange != null) {
-      // Simple range equality check
-      isSelected = range.start.year == currentRange.start.year && 
-                   range.start.month == currentRange.start.month && 
-                   range.end.day == currentRange.end.day; 
-      // Approximate check is fine for UX
-    }
+  @override
+  Widget build(BuildContext context) {
+    // Generate years from 2020 to Next Year
+    final List<int> years = List.generate(
+      (DateTime.now().year + 1) - 2020 + 1, 
+      (i) => 2020 + i
+    );
+    
+    final List<String> monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
 
-    return InkWell(
-      onTap: () => onSelect(range),
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.grey[100],
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black54,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            fontSize: 12
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        left: 20, 
+        right: 20, 
+        top: 10
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text("Filter Laporan PDF", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+
+          // Mode Tabs
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                _buildTab('Bulanan', filterMode == 'bulanan', () => setState(() => filterMode = 'bulanan')),
+                _buildTab('Tahunan', filterMode == 'tahunan', () => setState(() => filterMode = 'tahunan')),
+                _buildTab('Kustom', filterMode == 'custom', () => setState(() => filterMode = 'custom')),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Date Selection Area
+          if (filterMode == 'bulanan') ...[
+             Row(
+                children: [
+                   Expanded(
+                     flex: 2,
+                     child: DropdownButtonFormField<int>(
+                       value: selectedMonth,
+                       items: List.generate(12, (i) => DropdownMenuItem(value: i+1, child: Text(monthNames[i]))),
+                       onChanged: (v) => setState(() => selectedMonth = v!),
+                       decoration: const InputDecoration(
+                         labelText: 'Bulan',
+                         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                       ),
+                     ),
+                   ),
+                   const SizedBox(width: 12),
+                   Expanded(
+                     flex: 1,
+                     child: DropdownButtonFormField<int>(
+                       value: selectedYear,
+                       items: years.map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
+                       onChanged: (v) => setState(() => selectedYear = v!),
+                       decoration: const InputDecoration(
+                         labelText: 'Tahun',
+                         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                       ),
+                     ),
+                   ),
+                ],
+             ),
+          ] else if (filterMode == 'tahunan') ...[
+              DropdownButtonFormField<int>(
+                 value: selectedYear,
+                 items: years.map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
+                 onChanged: (v) => setState(() => selectedYear = v!),
+                 decoration: const InputDecoration(
+                   labelText: 'Pilih Tahun',
+                   border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                   contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                 ),
+              ),
+          ] else ...[
+             // Custom
+             InkWell(
+               onTap: () async {
+                 final picked = await showDateRangePicker(
+                   context: context,
+                   firstDate: DateTime(2020),
+                   lastDate: DateTime.now(),
+                   initialDateRange: customRange,
+                   builder: (context, child) => Theme(
+                     data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), // Assuming AppColors exists
+                     child: child!,
+                   ),
+                 );
+                 if (picked != null) setState(() => customRange = picked);
+               },
+               borderRadius: BorderRadius.circular(12),
+               child: Container(
+                 padding: const EdgeInsets.all(16),
+                 decoration: BoxDecoration(
+                   border: Border.all(color: Colors.grey.shade300),
+                   borderRadius: BorderRadius.circular(12),
+                 ),
+                 child: Row(
+                   children: [
+                     const Icon(Icons.date_range, color: Colors.blue),
+                     const SizedBox(width: 12),
+                     Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         const Text('Rentang Tanggal', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                         Text(
+                           customRange == null 
+                             ? 'Pilih Tanggal' 
+                             : '${Utils.formatDate(customRange!.start)} - ${Utils.formatDate(customRange!.end)}',
+                           style: const TextStyle(fontWeight: FontWeight.bold),
+                         ),
+                       ],
+                     ),
+                   ],
+                 ),
+               ),
+             ),
+          ],
+
+          const SizedBox(height: 24),
+
+          // Status & Type
+          const Text("Status Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip('Semua', selectedStatus == 'semua', () => setState(() => selectedStatus = 'semua')),
+                const SizedBox(width: 8),
+                _buildFilterChip('Lunas ✅', selectedStatus == 'sukses', () => setState(() => selectedStatus = 'sukses'), color: Colors.green),
+                const SizedBox(width: 8),
+                _buildFilterChip('Belum ⏳', selectedStatus == 'menunggu', () => setState(() => selectedStatus = 'menunggu'), color: Colors.orange),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          const Text("Tipe Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+          const SizedBox(height: 8),
+           SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip('Semua', selectedType == 'semua', () => setState(() => selectedType = 'semua')),
+                const SizedBox(width: 8),
+                _buildFilterChip('Masuk 🟢', selectedType == 'pemasukan', () => setState(() => selectedType = 'pemasukan'), color: Colors.green),
+                const SizedBox(width: 8),
+                _buildFilterChip('Keluar 🔴', selectedType == 'pengeluaran', () => setState(() => selectedType = 'pengeluaran'), color: Colors.red),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () {
+                DateTimeRange? finalRange;
+                if (filterMode == 'bulanan') {
+                   final start = DateTime(selectedYear, selectedMonth, 1);
+                   final lastDay = DateTime(selectedYear, selectedMonth + 1, 0).day;
+                   final end = DateTime(selectedYear, selectedMonth, lastDay, 23, 59, 59);
+                   finalRange = DateTimeRange(start: start, end: end);
+                } else if (filterMode == 'tahunan') {
+                   final start = DateTime(selectedYear, 1, 1);
+                   final end = DateTime(selectedYear, 12, 31, 23, 59, 59);
+                   finalRange = DateTimeRange(start: start, end: end);
+                } else {
+                   finalRange = customRange;
+                }
+                widget.onApply(selectedStatus, selectedType, finalRange);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Terapkan Filter & Cetak', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTab(String label, bool isActive, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)] : null,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label, 
+            style: TextStyle(
+              color: isActive ? AppColors.primary : Colors.grey[600],
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w500
+            ) 
           ),
         ),
       ),
     );
   }
 
-  Widget _buildChoiceChip(String label, bool selected, Function(bool) onSelected, {Color color = AppColors.primary}) {
-    return ChoiceChip(
-      label: Text(label),
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : Colors.black87, 
-        fontSize: 13,
-        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+  Widget _buildFilterChip(String label, bool isActive, VoidCallback onTap, {Color color = Colors.blue}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? color.withOpacity(0.1) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isActive ? color : Colors.transparent),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? color : Colors.grey[700],
+            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
       ),
-      selected: selected,
-      onSelected: onSelected,
-      selectedColor: color,
-      backgroundColor: Colors.white,
-      side: selected ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
-  Future<void> _generatePdf(
-    BuildContext context, 
-    String status, 
-    String type,
-    DateTimeRange? dateRange,
-  ) async {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyiapkan PDF...")));
-    }
-    
-    final snapshot = await _fs.getTransaksiList().first;
-    try {
-      await PdfService().exportLaporan(
-        snapshot, 
-        filterStatus: status,
-        filterType: type,
-        startDate: dateRange?.start,
-        endDate: dateRange?.end,
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal export: $e")));
-      }
-    }
-  }
+
+
 }
 
 // --- TEMPAT CEK MUTASI CUAN ---
