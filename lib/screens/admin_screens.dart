@@ -1952,11 +1952,12 @@ class _PdfFilterSheet extends StatefulWidget {
 class _PdfFilterSheetState extends State<_PdfFilterSheet> {
   String filterMode = 'bulanan'; // bulanan, tahunan, custom
   int selectedYear = DateTime.now().year;
-  int selectedMonth = DateTime.now().month;
+  int startMonth = DateTime.now().month;
+  int endMonth = DateTime.now().month;
   DateTimeRange? customRange;
   
   late String selectedStatus;
-  late String selectedType;
+  late String selectedType; // ...
 
   @override
   void initState() {
@@ -1964,182 +1965,10 @@ class _PdfFilterSheetState extends State<_PdfFilterSheet> {
     selectedStatus = widget.initialStatus;
     selectedType = widget.initialType;
   }
+  
+  // ... build method ...
 
-  @override
-  Widget build(BuildContext context) {
-    // Generate years from 2020 to Next Year
-    final List<int> years = List.generate(
-      (DateTime.now().year + 1) - 2020 + 1, 
-      (i) => 2020 + i
-    );
-    
-    final List<String> monthNames = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ];
-
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        left: 20, 
-        right: 20, 
-        top: 10
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text("Filter Laporan PDF", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-
-          // Mode Tabs
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                _buildTab('Bulanan', filterMode == 'bulanan', () => setState(() => filterMode = 'bulanan')),
-                _buildTab('Tahunan', filterMode == 'tahunan', () => setState(() => filterMode = 'tahunan')),
-                _buildTab('Kustom', filterMode == 'custom', () => setState(() => filterMode = 'custom')),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Date Selection Area
-          if (filterMode == 'bulanan') ...[
-             Row(
-                children: [
-                   Expanded(
-                     flex: 2,
-                     child: DropdownButtonFormField<int>(
-                       value: selectedMonth,
-                       items: List.generate(12, (i) => DropdownMenuItem(value: i+1, child: Text(monthNames[i]))),
-                       onChanged: (v) => setState(() => selectedMonth = v!),
-                       decoration: const InputDecoration(
-                         labelText: 'Bulan',
-                         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-                         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                       ),
-                     ),
-                   ),
-                   const SizedBox(width: 12),
-                   Expanded(
-                     flex: 1,
-                     child: DropdownButtonFormField<int>(
-                       value: selectedYear,
-                       items: years.map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
-                       onChanged: (v) => setState(() => selectedYear = v!),
-                       decoration: const InputDecoration(
-                         labelText: 'Tahun',
-                         border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-                         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                       ),
-                     ),
-                   ),
-                ],
-             ),
-          ] else if (filterMode == 'tahunan') ...[
-              DropdownButtonFormField<int>(
-                 value: selectedYear,
-                 items: years.map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
-                 onChanged: (v) => setState(() => selectedYear = v!),
-                 decoration: const InputDecoration(
-                   labelText: 'Pilih Tahun',
-                   border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-                   contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                 ),
-              ),
-          ] else ...[
-             // Custom
-             InkWell(
-               onTap: () async {
-                 final picked = await showDateRangePicker(
-                   context: context,
-                   firstDate: DateTime(2020),
-                   lastDate: DateTime.now(),
-                   initialDateRange: customRange,
-                   builder: (context, child) => Theme(
-                     data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), // Assuming AppColors exists
-                     child: child!,
-                   ),
-                 );
-                 if (picked != null) setState(() => customRange = picked);
-               },
-               borderRadius: BorderRadius.circular(12),
-               child: Container(
-                 padding: const EdgeInsets.all(16),
-                 decoration: BoxDecoration(
-                   border: Border.all(color: Colors.grey.shade300),
-                   borderRadius: BorderRadius.circular(12),
-                 ),
-                 child: Row(
-                   children: [
-                     const Icon(Icons.date_range, color: Colors.blue),
-                     const SizedBox(width: 12),
-                     Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         const Text('Rentang Tanggal', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                         Text(
-                           customRange == null 
-                             ? 'Pilih Tanggal' 
-                             : '${Utils.formatDate(customRange!.start)} - ${Utils.formatDate(customRange!.end)}',
-                           style: const TextStyle(fontWeight: FontWeight.bold),
-                         ),
-                       ],
-                     ),
-                   ],
-                 ),
-               ),
-             ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // Status & Type
-          const Text("Status Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip('Semua', selectedStatus == 'semua', () => setState(() => selectedStatus = 'semua')),
-                const SizedBox(width: 8),
-                _buildFilterChip('Lunas ✅', selectedStatus == 'sukses', () => setState(() => selectedStatus = 'sukses'), color: Colors.green),
-                const SizedBox(width: 8),
-                _buildFilterChip('Belum ⏳', selectedStatus == 'menunggu', () => setState(() => selectedStatus = 'menunggu'), color: Colors.orange),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          const Text("Tipe Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
-          const SizedBox(height: 8),
-           SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip('Semua', selectedType == 'semua', () => setState(() => selectedType = 'semua')),
-                const SizedBox(width: 8),
-                _buildFilterChip('Masuk 🟢', selectedType == 'pemasukan', () => setState(() => selectedType = 'pemasukan'), color: Colors.green),
-                const SizedBox(width: 8),
-                _buildFilterChip('Keluar 🔴', selectedType == 'pengeluaran', () => setState(() => selectedType = 'pengeluaran'), color: Colors.red),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 32),
+  // ... inside Widget build() ...
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -2147,9 +1976,10 @@ class _PdfFilterSheetState extends State<_PdfFilterSheet> {
               onPressed: () {
                 DateTimeRange? finalRange;
                 if (filterMode == 'bulanan') {
-                   final start = DateTime(selectedYear, selectedMonth, 1);
-                   final lastDay = DateTime(selectedYear, selectedMonth + 1, 0).day;
-                   final end = DateTime(selectedYear, selectedMonth, lastDay, 23, 59, 59);
+                   // Calculate correct start/end based on user selection
+                   final start = DateTime(selectedYear, startMonth, 1);
+                   final lastDay = DateTime(selectedYear, endMonth + 1, 0).day; // Last day of endMonth
+                   final end = DateTime(selectedYear, endMonth, lastDay, 23, 59, 59);
                    finalRange = DateTimeRange(start: start, end: end);
                 } else if (filterMode == 'tahunan') {
                    final start = DateTime(selectedYear, 1, 1);
