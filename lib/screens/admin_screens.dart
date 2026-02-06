@@ -33,28 +33,28 @@ class AdminMainScreen extends StatefulWidget {
 
 class _AdminMainScreenState extends State<AdminMainScreen> with SingleTickerProviderStateMixin {
   int _idx = 0;
-  String? _role;
+  UserModel? _currentUser;
   final AuthService _auth = AuthService();
-
+  late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    _loadRole();
-    
-
+    _pageController = PageController();
+    _loadUser();
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     super.dispose();
   }
 
-  void _loadRole() async {
+  void _loadUser() async {
     final user = await _auth.getCurrentUser();
     if (mounted) {
       setState(() {
-        _role = user?.role;
+        _currentUser = user;
       });
     }
   }
@@ -64,17 +64,20 @@ class _AdminMainScreenState extends State<AdminMainScreen> with SingleTickerProv
       setState(() {
         _idx = index;
       });
-      
-
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutQuart,
+      );
     }
   }
 
   List<Widget> get _screens {
-    if (_role == 'ketua_rt') {
+    if (_currentUser?.role == 'ketua_rt') {
        // Ketua RT: Dashboard, Laporan Transaksi (ReadOnly), User List, Profile
        // Hide "Kelola Iuran"
        return [
-         const AdminDashboardScreen(),
+         AdminDashboardScreen(currentUser: _currentUser!),
          const AdminTransaksiScreen(), // Ensure this screen handles readonly/actions inside if needed, or create separate if strict
          const AdminUserScreen(), // Laporan Warga
          const AdminProfileScreen(),
@@ -82,7 +85,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> with SingleTickerProv
     }
     // Default Admin
     return [
-      const AdminDashboardScreen(),
+      AdminDashboardScreen(currentUser: _currentUser!),
       const AdminTransaksiScreen(),
       const AdminIuranScreen(),
       const AdminUserScreen(),
@@ -90,11 +93,9 @@ class _AdminMainScreenState extends State<AdminMainScreen> with SingleTickerProv
     ];
   }
 
-
-
   @override
   Widget build(BuildContext context) {
-    if (_role == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_currentUser == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     
     // Safety check idx if role changes/hot reload
     if (_idx >= _screens.length) _idx = 0;
@@ -103,7 +104,17 @@ class _AdminMainScreenState extends State<AdminMainScreen> with SingleTickerProv
       extendBody: true,
       body: Stack(
         children: [
-          _screens[_idx],
+          PageView(
+            controller: _pageController,
+            physics: const BouncingScrollPhysics(),
+            onPageChanged: (index) {
+              setState(() {
+                _idx = index;
+              });
+              HapticFeedback.selectionClick();
+            },
+            children: _screens,
+          ),
           Positioned(
             left: 0,
             right: 0,
@@ -122,7 +133,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> with SingleTickerProv
   }
 
   List<IconData> _getNavIcons() {
-    if (_role == 'ketua_rt') {
+    if (_currentUser?.role == 'ketua_rt') {
       return [
         Icons.dashboard_rounded,
         Icons.list_alt_rounded,
@@ -197,7 +208,8 @@ class AdminWavyClipper extends CustomClipper<Path> {
 
 // --- DASHBOARD ADMIN GANTENG ---
 class AdminDashboardScreen extends StatefulWidget {
-  const AdminDashboardScreen({super.key});
+  final UserModel currentUser;
+  const AdminDashboardScreen({super.key, required this.currentUser});
 
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
@@ -207,17 +219,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final FirestoreService _fs = FirestoreService();
   final AuthService _auth = AuthService();
   final SupabaseService _supabase = SupabaseService();
-  UserModel? _currentAdmin;
+  
+  // Local state removed, use widget.currentUser
 
   @override
   void initState() {
     super.initState();
-    _loadAdmin();
-  }
-
-  void _loadAdmin() async {
-    _currentAdmin = await _auth.getCurrentUser();
-    setState(() {});
   }
 
 
@@ -225,7 +232,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     // Sesuain menu sama jabatan
-    final bool isKetuaRT = _currentAdmin?.role == 'ketua_rt';
+    final bool isKetuaRT = widget.currentUser.role == 'ketua_rt';
 
     return Scaffold(
       backgroundColor: isKetuaRT ? RoleTheme.rtBackground : RoleTheme.adminBackground,
@@ -272,12 +279,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                    child: _currentAdmin == null 
-                      ? const SizedBox() 
-                      : StreamBuilder<UserModel>(
-                        stream: _fs.streamUser(_currentAdmin!.id),
+                    child: StreamBuilder<UserModel>(
+                        stream: _fs.streamUser(widget.currentUser.id),
                         builder: (context, snapshot) {
-                          final user = snapshot.data ?? _currentAdmin!;
+                          final user = snapshot.data ?? widget.currentUser;
                           return Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -545,23 +550,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     count: pendingCount,
                                     color: Colors.orange,
                                     onTap: () {
-                                      // Navigate to verifikasi tab
-                                      final parentState = context.findAncestorStateOfType<_AdminMainScreenState>();
-                                      if (parentState != null) {
-                                        parentState.setState(() {
-                                          parentState._idx = 1; // Index tab verifikasi
-                                        });
-                                      }
+                                      final parent = context.findAncestorStateOfType<_AdminMainScreenState>();
+                                      parent?._onTabTapped(1);
                                     },
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: _buildQuickActionCard(
-                                    icon: Icons.add_circle_outline,
-                                    label: 'Tambah Iuran',
-                                    color: Colors.blue,
-                                    onTap: () => _showAddIuranDialog(context),
+                                    icon: Icons.analytics_outlined,
+                                    label: 'Laporan',
+                                    color: Colors.purple,
+                                    onTap: () => _exportPdf(context),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -573,13 +573,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   count: totalWarga,
                                   color: Colors.green,
                                   onTap: () {
-                                    // Navigate to warga tab
-                                    final parentState = context.findAncestorStateOfType<_AdminMainScreenState>();
-                                    if (parentState != null) {
-                                      parentState.setState(() {
-                                        parentState._idx = isKetuaRT ? 2 : 3; // Index tab warga (2 for RT, 3 for Admin)
-                                      });
-                                    }
+                                    final parent = context.findAncestorStateOfType<_AdminMainScreenState>();
+                                    parent?._onTabTapped(isKetuaRT ? 2 : 3);
                                   },
                                 ),
                               ),
@@ -595,57 +590,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             const SizedBox(height: 20),
 
-            // 4 Ikon Menu (Jalan Pintas)
-            Padding(
-               padding: const EdgeInsets.symmetric(horizontal: 20),
-               child: Column(
-                 children: [
-                   Row(
-                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                     children: [
-                       if (isKetuaRT) ...[
-                          Expanded(child: _buildMenuIcon(Icons.campaign_outlined, 'Info', AppTheme.warning, () {
-                            if (_currentAdmin != null) Navigator.push(context, MaterialPageRoute(builder: (_) => PengumumanListScreen(currentUser: _currentAdmin!)));
-                          })),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildMenuIcon(Icons.forum_outlined, 'Forum', AppTheme.secondary, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForumDiskusiScreen())))),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildMenuIcon(Icons.analytics_outlined, 'Laporan', AppTheme.primary, () => _exportPdf(context))),
-                       ] else ...[
-                          Expanded(child: _buildMenuIcon(Icons.note_add_outlined, 'Iuran', AppTheme.primary, () => _showAddIuranDialog(context))),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildMenuIcon(Icons.campaign_outlined, 'Info', AppTheme.warning, () {
-                            if (_currentAdmin != null) Navigator.push(context, MaterialPageRoute(builder: (_) => PengumumanListScreen(currentUser: _currentAdmin!)));
-                          })),
-                          const SizedBox(width: 10),
-                          Expanded(child: _buildMenuIcon(Icons.forum_outlined, 'Forum', AppTheme.secondary, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForumDiskusiScreen())))),
-                       ]
-                     ],
-                   ),
-                   const SizedBox(height: 12),
-                   Row(
-                    children: [
-                       if (!isKetuaRT) ...[
-                         Expanded(child: _buildMenuIcon(Icons.person_add_outlined, 'Warga', AppTheme.success, () => _showAddUserDialog(context))),
-                         const SizedBox(width: 10),
-                         Expanded(child: _buildMenuIcon(Icons.analytics_outlined, 'Laporan', AppTheme.primary, () => _exportPdf(context))),
-                         const SizedBox(width: 10),
-                       ],
-                       
-                       Expanded(child: _buildMenuIcon(Icons.report_problem_outlined, 'Aduan', AppTheme.danger, () {
-                         if (_currentAdmin != null) Navigator.push(context, MaterialPageRoute(builder: (_) => PengaduanScreen(currentUser: _currentAdmin!)));
-                       })),
-
-                       if (isKetuaRT) ...[
-                          const SizedBox(width: 10),
-                          const Spacer(),
-                          const SizedBox(width: 10),
-                          const Spacer(),
-                       ]
-                    ],
-                   ),
-                 ],
-               ),
+            // Menu Geser Geser (Horizontal Scroll)
+            SizedBox(
+              height: 140,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                children: [
+                   if (isKetuaRT) ...[
+                      _buildMenuIcon(Icons.campaign_outlined, 'Info', AppTheme.warning, () => Navigator.push(context, MaterialPageRoute(builder: (_) => PengumumanListScreen(currentUser: widget.currentUser)))),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.forum_outlined, 'Forum', AppTheme.secondary, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForumDiskusiScreen()))),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.analytics_outlined, 'Laporan', AppTheme.primary, () => _exportPdf(context)),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.report_problem_outlined, 'Aduan', AppTheme.danger, () => Navigator.push(context, MaterialPageRoute(builder: (_) => PengaduanScreen(currentUser: widget.currentUser)))),
+                   ] else ...[
+                      _buildMenuIcon(Icons.analytics_outlined, 'Laporan', AppTheme.primary, () => _exportPdf(context)),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.attach_money_outlined, 'Iuran', AppTheme.primary, () => _showAddIuranDialog(context)),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.people_outline, 'Warga', AppTheme.success, () => _showAddUserDialog(context)),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.campaign_outlined, 'Info', AppTheme.warning, () => Navigator.push(context, MaterialPageRoute(builder: (_) => PengumumanListScreen(currentUser: widget.currentUser)))),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.forum_outlined, 'Forum', AppTheme.secondary, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForumDiskusiScreen()))),
+                      const SizedBox(width: 12),
+                      _buildMenuIcon(Icons.report_problem_outlined, 'Aduan', AppTheme.danger, () => Navigator.push(context, MaterialPageRoute(builder: (_) => PengaduanScreen(currentUser: widget.currentUser)))),
+                   ],
+                ],
+              ),
             ),
 
             const SizedBox(height: 24),
@@ -957,13 +932,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildMenuIcon(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildMenuIcon(IconData icon, String label, Color color, VoidCallback onTap, {double width = 100}) {
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
         onTap();
       },
       child: Container(
+        width: width,
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
            color: Colors.white,
@@ -971,6 +947,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
            boxShadow: AppTheme.softShadow,
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Stack(
               alignment: Alignment.center,
@@ -1403,14 +1380,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             );
                           }
 
-                          if (_currentAdmin != null) {
-                            await _fs.tambahPengeluaranAdmin(
-                              _currentAdmin!.id,
-                              _currentAdmin!.nama,
-                              int.parse(jumlahCtrl.text),
-                              descCtrl.text,
-                              buktiUrl: uploadedUrl,
-                            );
+                          // Removed null check since widget.currentUser is required
+                          await _fs.tambahPengeluaranAdmin(
+                            widget.currentUser.id,
+                            widget.currentUser.nama,
+                            int.parse(jumlahCtrl.text),
+                            descCtrl.text,
+                            buktiUrl: uploadedUrl,
+                          );
 
                             Navigator.pop(ctx);
                             if (context.mounted) {
@@ -1423,7 +1400,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ),
                               );
                             }
-                          }
                         } catch (e) {
                           setState(() => isUploading = false);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1489,7 +1465,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedPeriode,
+                    initialValue: selectedPeriode,
                     decoration: const InputDecoration(
                       labelText: "Periode Pembayaran",
                       border: OutlineInputBorder(),
@@ -1867,7 +1843,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           await _fs.addPengumuman(
                             titleCtrl.text,
                             descCtrl.text,
-                            _currentAdmin?.role == 'ketua_rt' ? "Ketua RT" : (_currentAdmin?.nama ?? "Admin"),
+                            widget.currentUser.role == 'ketua_rt' ? "Ketua RT" : widget.currentUser.nama,
                             urls,
                           );
 
@@ -1900,53 +1876,290 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _exportPdf(BuildContext context) async {
-    // Show dialog to select filter
-    String? selectedFilter = await showDialog<String>(
+    // Default Filters
+    String selectedStatus = 'semua';
+    String selectedType = 'semua';
+    DateTimeRange? selectedDateRange;
+
+    // Show Bottom Sheet instead of Dialog
+    await showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Pilih Filter Laporan"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildExportOption(ctx, "Semua Transaksi", "semua", Icons.list),
-            _buildExportOption(ctx, "Hanya Sukses", "sukses", Icons.check_circle, Colors.green),
-            _buildExportOption(ctx, "Menunggu Verifikasi", "menunggu", Icons.hourglass_top, Colors.orange),
-            _buildExportOption(ctx, "Gagal/Ditolak", "gagal", Icons.cancel, Colors.red),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
-        ],
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20, 
+              right: 20, 
+              top: 10
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag Handle
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text("Filter Laporan", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 24),
+
+                // 1. Filter Tanggal
+                const Text("Periode Waktu", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 10),
+                
+                // Quick Date Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildQuickDateChip("Semua", null, selectedDateRange, (r) => setState(() => selectedDateRange = r)),
+                      const SizedBox(width: 8),
+                      _buildQuickDateChip("Bulan Ini", 
+                        DateTimeRange(start: DateTime(DateTime.now().year, DateTime.now().month, 1), end: DateTime.now()), 
+                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
+                      ),
+                      const SizedBox(width: 8),
+                      _buildQuickDateChip("Bulan Lalu", 
+                        DateTimeRange(
+                          start: DateTime(DateTime.now().year, DateTime.now().month - 1, 1), 
+                          end: DateTime(DateTime.now().year, DateTime.now().month, 0)
+                        ), 
+                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
+                      ),
+                       const SizedBox(width: 8),
+                      _buildQuickDateChip("Tahun Ini", 
+                        DateTimeRange(start: DateTime(DateTime.now().year, 1, 1), end: DateTime.now()), 
+                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Manual Date Picker
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                      initialDateRange: selectedDateRange,
+                      builder: (context, child) {
+                          return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: const ColorScheme.light(
+                              primary: AppColors.primary,
+                              onPrimary: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      }
+                    );
+                    if (picked != null) {
+                      setState(() => selectedDateRange = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.05),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_month_rounded, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Tanggal Dipilih",
+                                style: TextStyle(fontSize: 11, color: AppColors.primary.withOpacity(0.8), fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                selectedDateRange == null 
+                                  ? "Semua Waktu" 
+                                  : "${Utils.formatDate(selectedDateRange!.start)} - ${Utils.formatDate(selectedDateRange!.end)}",
+                                style: const TextStyle(
+                                  fontSize: 15, 
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.dark
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.primary, size: 14),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+
+                // 2. Filter Tipe & Status Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     Expanded(
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                            const Text("Tipe Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8, runSpacing: 8,
+                              children: [
+                                 _buildChoiceChip("Semua", selectedType == 'semua', (b) => setState(() => selectedType = 'semua')),
+                                 _buildChoiceChip("Masuk", selectedType == 'pemasukan', (b) => setState(() => selectedType = 'pemasukan'), color: Colors.green),
+                                 _buildChoiceChip("Keluar", selectedType == 'pengeluaran', (b) => setState(() => selectedType = 'pengeluaran'), color: Colors.red),
+                              ],
+                            )
+                         ],
+                       ),
+                     ),
+                  ],
+                ),
+                 const SizedBox(height: 20),
+                 const Text("Status Pembayaran", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                 const SizedBox(height: 10),
+                 SingleChildScrollView(
+                   scrollDirection: Axis.horizontal,
+                   child: Row(
+                      children: [
+                        _buildChoiceChip('Semua', selectedStatus == 'semua', (b) => setState(() => selectedStatus = 'semua')),
+                        const SizedBox(width: 8),
+                        _buildChoiceChip('Sukses', selectedStatus == 'sukses', (b) => setState(() => selectedStatus = 'sukses'), color: Colors.green),
+                        const SizedBox(width: 8),
+                        _buildChoiceChip('Menunggu', selectedStatus == 'menunggu', (b) => setState(() => selectedStatus = 'menunggu'), color: Colors.orange),
+                        const SizedBox(width: 8),
+                         _buildChoiceChip('Gagal', selectedStatus == 'gagal', (b) => setState(() => selectedStatus = 'gagal'), color: Colors.red),
+                      ],
+                   ),
+                 ),
+
+                const SizedBox(height: 40),
+
+                // Action Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: () {
+                       Navigator.pop(ctx); 
+                       _generatePdf(context, selectedStatus, selectedType, selectedDateRange);
+                    },
+                    style: ElevatedButton.styleFrom(
+                       backgroundColor: AppColors.primary,
+                       foregroundColor: Colors.white,
+                       elevation: 0,
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                    ),
+                    child: const Text("Terapkan & Cetak PDF", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          );
+        }
       ),
     );
+  }
 
-    if (selectedFilter == null) return;
+  Widget _buildQuickDateChip(String label, DateTimeRange? range, DateTimeRange? currentRange, Function(DateTimeRange?) onSelect) {
+    bool isSelected = false;
+    if (range == null && currentRange == null) {
+      isSelected = true;
+    } else if (range != null && currentRange != null) {
+      // Simple range equality check
+      isSelected = range.start.year == currentRange.start.year && 
+                   range.start.month == currentRange.start.month && 
+                   range.end.day == currentRange.end.day; 
+      // Approximate check is fine for UX
+    }
 
+    return InkWell(
+      onTap: () => onSelect(range),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black54,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 12
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChoiceChip(String label, bool selected, Function(bool) onSelected, {Color color = AppColors.primary}) {
+    return ChoiceChip(
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : Colors.black87, 
+        fontSize: 13,
+        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+      ),
+      selected: selected,
+      onSelected: onSelected,
+      selectedColor: color,
+      backgroundColor: Colors.white,
+      side: selected ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Future<void> _generatePdf(
+    BuildContext context, 
+    String status, 
+    String type,
+    DateTimeRange? dateRange,
+  ) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyiapkan PDF...")));
     }
     
     final snapshot = await _fs.getTransaksiList().first;
     try {
-      await PdfService().exportLaporanBulanan(snapshot, filterStatus: selectedFilter);
+      await PdfService().exportLaporan(
+        snapshot, 
+        filterStatus: status,
+        filterType: type,
+        startDate: dateRange?.start,
+        endDate: dateRange?.end,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Gagal export: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal export: $e")));
       }
     }
-  }
-
-  Widget _buildExportOption(BuildContext ctx, String label, String value, IconData icon, [Color? color]) {
-    return ListTile(
-      leading: Icon(icon, color: color ?? AppColors.dark),
-      title: Text(label),
-      onTap: () => Navigator.pop(ctx, value),
-    );
   }
 }
 
@@ -2027,24 +2240,7 @@ class _AdminTransaksiScreenState extends State<AdminTransaksiScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
               tooltip: 'Export PDF',
-              onPressed: () async {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Menyiapkan PDF...")),
-                );
-                final snapshot = await fs.getTransaksiList().first;
-                try {
-                  await PdfService().exportLaporanBulanan(snapshot, filterStatus: _filterStatus);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Gagal export: $e")),
-                    );
-                  }
-                }
-              },
+              onPressed: () => _showPdfExportMenu(context),
             ),
           ],
         ],
@@ -2071,6 +2267,7 @@ class _AdminTransaksiScreenState extends State<AdminTransaksiScreen> {
           if (_filterType != 'semua') {
             list = list.where((t) => t.tipe == _filterType).toList();
           }
+
 
           // Apply Date Range Filter
           if (_dateRange != null) {
@@ -2124,7 +2321,7 @@ class _AdminTransaksiScreenState extends State<AdminTransaksiScreen> {
                               color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
+                            child: const Text(
                               'Filtered',
                               style: TextStyle(
                                 fontSize: 10,
@@ -2298,7 +2495,7 @@ class _AdminTransaksiScreenState extends State<AdminTransaksiScreen> {
                     onRefresh: () async {
                       // Haptic Feedback for better feel
                       HapticFeedback.mediumImpact();
-                      // Pura-pura loading biar keren
+                      // Simulate loading delay
                       await Future.delayed(const Duration(milliseconds: 1000));
                       if (mounted) setState(() {}); // Trigger rebuild
                       _refreshController.refreshCompleted();
@@ -2452,6 +2649,283 @@ class _AdminTransaksiScreenState extends State<AdminTransaksiScreen> {
     );
   }
 
+  Future<void> _showPdfExportMenu(BuildContext context) async {
+    // Default Filters (Reset or match current screen's filter?) -> Let's use defaults for fresh export
+    String selectedStatus = 'semua';
+    String selectedType = 'semua';
+    DateTimeRange? selectedDateRange;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20, 
+              right: 20, 
+              top: 10
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text("Filter Laporan", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 24),
+
+                const Text("Periode Waktu", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 10),
+                
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildQuickDateChip("Semua", null, selectedDateRange, (r) => setState(() => selectedDateRange = r)),
+                      const SizedBox(width: 8),
+                      _buildQuickDateChip("Bulan Ini", 
+                        DateTimeRange(start: DateTime(DateTime.now().year, DateTime.now().month, 1), end: DateTime.now()), 
+                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
+                      ),
+                      const SizedBox(width: 8),
+                      _buildQuickDateChip("Bulan Lalu", 
+                        DateTimeRange(
+                          start: DateTime(DateTime.now().year, DateTime.now().month - 1, 1), 
+                          end: DateTime(DateTime.now().year, DateTime.now().month, 0)
+                        ), 
+                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
+                      ),
+                       const SizedBox(width: 8),
+                      _buildQuickDateChip("Tahun Ini", 
+                        DateTimeRange(start: DateTime(DateTime.now().year, 1, 1), end: DateTime.now()), 
+                        selectedDateRange, (r) => setState(() => selectedDateRange = r)
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                      initialDateRange: selectedDateRange,
+                      builder: (context, child) {
+                          return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: const ColorScheme.light(
+                              primary: AppColors.primary,
+                              onPrimary: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      }
+                    );
+                    if (picked != null) {
+                      setState(() => selectedDateRange = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.05),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_month_rounded, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Tanggal Dipilih",
+                                style: TextStyle(fontSize: 11, color: AppColors.primary.withOpacity(0.8), fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                selectedDateRange == null 
+                                  ? "Semua Waktu" 
+                                  : "${Utils.formatDate(selectedDateRange!.start)} - ${Utils.formatDate(selectedDateRange!.end)}",
+                                style: const TextStyle(
+                                  fontSize: 15, 
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.dark
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.primary, size: 14),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     Expanded(
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                            const Text("Tipe Transaksi", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8, runSpacing: 8,
+                              children: [
+                                 _buildChoiceChip("Semua", selectedType == 'semua', (b) => setState(() => selectedType = 'semua')),
+                                 _buildChoiceChip("Masuk", selectedType == 'pemasukan', (b) => setState(() => selectedType = 'pemasukan'), color: Colors.green),
+                                 _buildChoiceChip("Keluar", selectedType == 'pengeluaran', (b) => setState(() => selectedType = 'pengeluaran'), color: Colors.red),
+                              ],
+                            )
+                         ],
+                       ),
+                     ),
+                  ],
+                ),
+                 const SizedBox(height: 20),
+                 const Text("Status Pembayaran", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                 const SizedBox(height: 10),
+                 SingleChildScrollView(
+                   scrollDirection: Axis.horizontal,
+                   child: Row(
+                      children: [
+                        _buildChoiceChip('Semua', selectedStatus == 'semua', (b) => setState(() => selectedStatus = 'semua')),
+                        const SizedBox(width: 8),
+                        _buildChoiceChip('Sukses', selectedStatus == 'sukses', (b) => setState(() => selectedStatus = 'sukses'), color: Colors.green),
+                        const SizedBox(width: 8),
+                        _buildChoiceChip('Menunggu', selectedStatus == 'menunggu', (b) => setState(() => selectedStatus = 'menunggu'), color: Colors.orange),
+                        const SizedBox(width: 8),
+                         _buildChoiceChip('Gagal', selectedStatus == 'gagal', (b) => setState(() => selectedStatus = 'gagal'), color: Colors.red),
+                      ],
+                   ),
+                 ),
+
+                const SizedBox(height: 40),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: () {
+                       Navigator.pop(ctx); 
+                       _generatePdf(context, selectedStatus, selectedType, selectedDateRange);
+                    },
+                    style: ElevatedButton.styleFrom(
+                       backgroundColor: AppColors.primary,
+                       foregroundColor: Colors.white,
+                       elevation: 0,
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                    ),
+                    child: const Text("Terapkan & Cetak PDF", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          );
+        }
+      ),
+    );
+  }
+
+  Widget _buildQuickDateChip(String label, DateTimeRange? range, DateTimeRange? currentRange, Function(DateTimeRange?) onSelect) {
+    bool isSelected = false;
+    if (range == null && currentRange == null) {
+      isSelected = true;
+    } else if (range != null && currentRange != null) {
+      isSelected = range.start.year == currentRange.start.year && 
+                   range.start.month == currentRange.start.month && 
+                   range.end.day == currentRange.end.day; 
+    }
+
+    return InkWell(
+      onTap: () => onSelect(range),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black54,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 12
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChoiceChip(String label, bool selected, Function(bool) onSelected, {Color color = AppColors.primary}) {
+    return ChoiceChip(
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : Colors.black87, 
+        fontSize: 13,
+        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+      ),
+      selected: selected,
+      onSelected: onSelected,
+      selectedColor: color,
+      backgroundColor: Colors.white,
+      side: selected ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+  
+  Future<void> _generatePdf(
+    BuildContext context, 
+    String status, 
+    String type,
+    DateTimeRange? dateRange,
+  ) async {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Menyiapkan PDF...")));
+    }
+    
+    final snapshot = await FirestoreService().getTransaksiList().first;
+    try {
+      await PdfService().exportLaporan(
+        snapshot, 
+        filterStatus: status,
+        filterType: type, // Ensure this parameter is handled in PdfService
+        startDate: dateRange?.start,
+        endDate: dateRange?.end,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal export: $e")));
+      }
+    }
+  }
 
 }
 
@@ -3168,7 +3642,7 @@ class _AdminIuranScreenState extends State<AdminIuranScreen> {
                 const SizedBox(height: 16),
                 // Periode Dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedPeriode,
+                  initialValue: selectedPeriode,
                   isExpanded: true, // Fix overflow
                   decoration: InputDecoration(
                     labelText: "Periode Iuran",
@@ -3240,11 +3714,11 @@ class _AdminIuranScreenState extends State<AdminIuranScreen> {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Row(
+                                content: const Row(
                                   children: [
-                                    const Icon(Icons.check_circle, color: Colors.white),
-                                    const SizedBox(width: 8),
-                                    const Text("Iuran berhasil ditambahkan!"),
+                                    Icon(Icons.check_circle, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text("Iuran berhasil ditambahkan!"),
                                   ],
                                 ),
                                 backgroundColor: Colors.green,
@@ -3318,7 +3792,7 @@ class _AdminIuranScreenState extends State<AdminIuranScreen> {
                 const SizedBox(height: 12),
                 // Periode Dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedPeriode,
+                  initialValue: selectedPeriode,
                   decoration: const InputDecoration(
                     labelText: "Periode Iuran",
                     border: OutlineInputBorder(),
@@ -3471,7 +3945,7 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
                      color: Colors.grey.shade100,
                      width: double.infinity,
                      child: Text(
-                       "Menampilkan ${filteredUsers.length} warga (${_filterStatus})",
+                       "Menampilkan ${filteredUsers.length} warga ($_filterStatus)",
                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                      ),
                    ),

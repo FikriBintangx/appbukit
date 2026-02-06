@@ -253,10 +253,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           ),
           child: Text(
             '$count',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF6C63FF),
+              color: Color(0xFF6C63FF),
             ),
           ),
         ),
@@ -347,9 +347,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
+          child: const Icon(
             Icons.receipt_long,
-            color: const Color(0xFF6C63FF),
+            color: Color(0xFF6C63FF),
             size: 20,
           ),
         ),
@@ -365,7 +365,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           Utils.formatCurrency(data['harga'] ?? 0),
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            color: const Color(0xFF6C63FF),
+            color: Color(0xFF6C63FF),
           ),
         ),
         onTap: () {
@@ -386,7 +386,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             user.nama.isNotEmpty ? user.nama[0].toUpperCase() : 'U',
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF6C63FF),
+              color: Color(0xFF6C63FF),
             ),
           ),
         ),

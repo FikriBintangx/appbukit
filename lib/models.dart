@@ -80,10 +80,10 @@ class IuranModel {
     return {'nama': nama, 'harga': harga, 'deskripsi': deskripsi, 'periode': periode};
   }
   
-  // Helper buat ngecek iurannya berulang apa kagak
+  // Check if contribution is recurring
   bool get isRecurring => periode == 'bulanan' || periode == 'tahunan';
   
-  // Helper buat nampilin periode biar cantik
+  // Format period string
   String get periodeDisplay {
     switch (periode) {
       case 'bulanan':
@@ -157,7 +157,7 @@ class TransaksiModel {
   }
 }
 
-// ========== MODEL BARU BIAR MAKIN CANGGIH ==========
+// ========== NEW MODELS ==========
 
 class PengumumanModel {
   final String id;

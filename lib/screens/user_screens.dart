@@ -6,6 +6,7 @@ import 'package:tiara_fin/services.dart';
 import 'package:tiara_fin/screens/auth_screens.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:ui'; // For Glassmorphism
 
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:tiara_fin/screens/notification_screen.dart';
@@ -23,6 +24,8 @@ import 'package:tiara_fin/screens/pengaduan_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:tiara_fin/message_helper.dart';
 import 'package:tiara_fin/screens/detail_keuangan_screen.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ========== TETAPAN HAKIKI ==========
 // ========== TETAPAN HAKIKI ==========
@@ -90,36 +93,34 @@ class UserMainScreen extends StatefulWidget {
 
 class _UserMainScreenState extends State<UserMainScreen> with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+  late PageController _pageController;
   late List<Widget> _screens;
-  late AnimationController _waveAnimationController;
-  late Animation<double> _waveAnimation;
+  late AnimationController _waveController;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    
+    // Wave Animation Controller
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
     _screens = [
-      const BerandaScreen(),
+      BerandaScreen(waveController: _waveController),
       const RiwayatScreen(),
       const PembayaranScreen(),
       const ProfileScreen(),
     ];
-    
-    // Siapin animasi gelombang cinta
-    _waveAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    
-    _waveAnimation = CurvedAnimation(
-      parent: _waveAnimationController,
-      curve: Curves.easeInOutSine,
-    );
   }
 
   @override
   void dispose() {
-    _waveAnimationController.dispose();
+    _pageController.dispose();
+    _waveController.dispose();
     super.dispose();
   }
 
@@ -128,9 +129,11 @@ class _UserMainScreenState extends State<UserMainScreen> with SingleTickerProvid
       setState(() {
         _selectedIndex = index;
       });
-      
-      // Panggil gelombangnya dong
-      _waveAnimationController.forward(from: 0.0);
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutQuart,
+      );
     }
   }
 
@@ -141,8 +144,18 @@ class _UserMainScreenState extends State<UserMainScreen> with SingleTickerProvid
       extendBody: true, // Important for floating effect over body content
       body: Stack(
         children: [
-          // Main Body
-          _screens[_selectedIndex],
+          // Main Body with PageView for smooth sliding
+          PageView(
+            controller: _pageController,
+            physics: const BouncingScrollPhysics(),
+            onPageChanged: (index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+              HapticFeedback.selectionClick();
+            },
+            children: _screens,
+          ),
           
           // Navbar Melayang Kek Harapan
           Positioned(
@@ -173,7 +186,8 @@ class _UserMainScreenState extends State<UserMainScreen> with SingleTickerProvid
 
 
 class BerandaScreen extends StatefulWidget {
-  const BerandaScreen({super.key});
+  final AnimationController? waveController;
+  const BerandaScreen({super.key, this.waveController});
 
   @override
   State<BerandaScreen> createState() => _BerandaScreenState();
@@ -381,7 +395,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 100), // Biar ga tabrakan
+        padding: const EdgeInsets.only(bottom: 100), // Prevent overlap with navbar
         child: FloatingActionButton(
           onPressed: () => _showAddForumDialog(context),
           backgroundColor: AppColors.primary,
@@ -397,9 +411,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
           distance: 60,
         ),
         onRefresh: () async {
-           HapticFeedback.mediumImpact(); // Hape geter dikit pas refresh
+           HapticFeedback.mediumImpact(); // Haptic feedback on refresh
            await Future.delayed(const Duration(seconds: 1));
-           _loadData(); // Muat ulang data
+           _loadData(); // Reload data
            _refreshController.refreshCompleted();
         },
         child: SingleChildScrollView(
@@ -407,40 +421,45 @@ class _BerandaScreenState extends State<BerandaScreen> {
           child: Column(
             children: [
 
-              // Kepala Aplikasi Yang Mahal
+              // Header Section
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // 1. Latar Belakang Warna-Warni
-                  ClipPath(
-                    clipper: WavyClipper(),
-                    child: Container(
-                      height: 260,
-                      decoration: const BoxDecoration(
-                        gradient: RoleTheme.wargaGradient,
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            top: -50, right: -30,
-                            child: Container(
-                              width: 150, height: 150,
-                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-                            ),
+                  // Background Gradient
+                  AnimatedBuilder(
+                    animation: widget.waveController ?? const AlwaysStoppedAnimation(0),
+                    builder: (context, child) {
+                      return ClipPath(
+                        clipper: WavyClipper(animationValue: widget.waveController?.value ?? 0),
+                        child: Container(
+                          height: 260,
+                          decoration: const BoxDecoration(
+                            gradient: RoleTheme.wargaGradient,
                           ),
-                          Positioned(
-                            bottom: 20, left: -20,
-                            child: Container(
-                              width: 100, height: 100,
-                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
-                            ),
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                top: -50, right: -30,
+                                child: Container(
+                                  width: 150, height: 150,
+                                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 20, left: -20,
+                                child: Container(
+                                  width: 100, height: 100,
+                                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    }
                   ),
 
-                  // 2. Isian Kepala
+                  // Header Content
                   SafeArea(
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
@@ -487,7 +506,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                           ),
                           Row(
                             children: [
-                               // Tombol SOS (Kalo lagi kepepet)
+                               // SOS Button
                                GestureDetector(
                                 onTap: () {
                                   HapticFeedback.heavyImpact(); // Getaran kuat untuk emergency
@@ -496,7 +515,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.redAccent.withValues(alpha: 0.9), // Merah menyala tanda bahaya
+                                    color: Colors.redAccent.withValues(alpha: 0.9), // Emergency Red
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: [
                                       BoxShadow(
@@ -520,7 +539,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                               ),
                               const SizedBox(width: 12),
                           
-                              // Lonceng Pemberitahuan pake Angka
+                              // Notification Icon with Badge
                               StreamBuilder<List<NotificationModel>>(
                                 stream: _fs.getNotifications(_currentUser?.role ?? 'warga'),
                                 builder: (context, snapshot) {
@@ -580,7 +599,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     ),
                   ),
                   
-                  // Kartu Saldo yang Nindih
+                  // Balance Card
                   Padding(
                     padding: const EdgeInsets.only(top: 140, left: 16, right: 16),
                     child: _buildBalanceCard(),
@@ -590,7 +609,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
               
               const SizedBox(height: 20),
               
-              // 4 Sekawan Menu
+              // Main Menu Grid
               Padding(
                  padding: const EdgeInsets.symmetric(horizontal: 16),
                  child: FadeInSlide.delayed(
@@ -601,7 +620,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
               
               const SizedBox(height: 24),
               
-               // Pengumuman Penting Bingits
+               // Announcements Section
               FadeInSlide.delayed(
                 delay: const Duration(milliseconds: 400),
                 child: Column(
@@ -630,7 +649,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
               
               const SizedBox(height: 24),
 
-              // Itung-itungan Duit
+              // Financial Statistics
               FadeInSlide.delayed(
                 delay: const Duration(milliseconds: 500),
                 child: Column(
@@ -650,10 +669,11 @@ class _BerandaScreenState extends State<BerandaScreen> {
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                           
-                          // Olah Datanya Dulu
+                          // Process Data
                           final trans = snapshot.data!;
                           final now = DateTime.now();
-                          final List<Map<String, dynamic>> monthlyStats = [];
+                          final List<FlSpot> incomeSpots = [];
+                          final List<FlSpot> expenseSpots = [];
 
                           for (int i = 5; i >= 0; i--) {
                             final date = DateTime(now.year, now.month - i, 1);
@@ -669,84 +689,87 @@ class _BerandaScreenState extends State<BerandaScreen> {
                               if (t.tipe == 'pengeluaran') expense += t.uang;
                             }
                             
-                            monthlyStats.add({
-                              'month': date.month,
-                              'income': income,
-                              'expense': expense,
-                            });
+                            incomeSpots.add(FlSpot((5-i).toDouble(), income));
+                            expenseSpots.add(FlSpot((5-i).toDouble(), expense));
                           }
 
+                          // Get max Y for dynamic scaling
                           double maxVal = 0;
-                          for(var m in monthlyStats) {
-                            if (m['income'] > maxVal) maxVal = m['income'];
-                            if (m['expense'] > maxVal) maxVal = m['expense'];
-                          }
+                          for(var s in incomeSpots) if(s.y > maxVal) maxVal = s.y;
+                          for(var s in expenseSpots) if(s.y > maxVal) maxVal = s.y;
                           if (maxVal == 0) maxVal = 100;
 
-                          return BarChart(
-                            BarChartData(
-                              alignment: BarChartAlignment.spaceAround,
-                              maxY: maxVal * 1.2,
-                              barTouchData: BarTouchData(
-                                enabled: true,
-                                touchTooltipData: BarTouchTooltipData(
-                                  getTooltipColor: (group) => Colors.blueGrey,
-                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                    return BarTooltipItem(
-                                      Utils.formatCurrency(rod.toY.toInt()),
-                                      const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                    );
-                                  },
-                                ),
+                          return LineChart(
+                            LineChartData(
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: false,
+                                horizontalInterval: maxVal / 5,
+                                getDrawingHorizontalLine: (value) => 
+                                  FlLine(color: Colors.grey.withValues(alpha: 0.1), strokeWidth: 1),
                               ),
                               titlesData: FlTitlesData(
                                 show: true,
+                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                 bottomTitles: AxisTitles(
                                   sideTitles: SideTitles(
                                     showTitles: true,
+                                    reservedSize: 30,
+                                    interval: 1,
                                     getTitlesWidget: (value, meta) {
-                                      final index = value.toInt();
-                                      if (index >= 0 && index < monthlyStats.length) {
-                                        final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-                                        return Padding(
-                                          padding: const EdgeInsets.only(top: 8.0),
-                                          child: Text(
-                                            monthNames[monthlyStats[index]['month'] - 1],
-                                            style: const TextStyle(color: Colors.grey, fontSize: 10),
-                                          ),
-                                        );
-                                      }
-                                      return const Text('');
+                                      final monthIndex = DateTime.now().month - (5 - value.toInt());
+                                      final safeMonthIndex = (monthIndex - 1) % 12; // 0-11
+                                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(months[safeMonthIndex], style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                      );
                                     },
                                   ),
                                 ),
-                                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: false,
+                                  ),
+                                ),
                               ),
-                              gridData: const FlGridData(show: false),
                               borderData: FlBorderData(show: false),
-                              barGroups: monthlyStats.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final data = entry.value;
-                                return BarChartGroupData(
-                                  x: index,
-                                  barRods: [
-                                    BarChartRodData(
-                                      toY: (data['income'] as double),
-                                      color: AppColors.success,
-                                      width: 8,
-                                      borderRadius: BorderRadius.circular(4),
+                              minX: 0,
+                              maxX: 5,
+                              minY: 0,
+                              maxY: maxVal * 1.2,
+                              lineBarsData: [
+                                // Income Line
+                                LineChartBarData(
+                                  spots: incomeSpots,
+                                  isCurved: true,
+                                  gradient: const LinearGradient(colors: [AppColors.success, Color(0xFF69F0AE)]),
+                                  barWidth: 4,
+                                  isStrokeCapRound: true,
+                                  dotData: const FlDotData(show: false),
+                                  belowBarData: BarAreaData(
+                                    show: true,
+                                    gradient: LinearGradient(
+                                      colors: [AppColors.success.withValues(alpha: 0.3), AppColors.success.withValues(alpha: 0.0)],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
                                     ),
-                                    BarChartRodData(
-                                      toY: (data['expense'] as double),
-                                      color: AppColors.danger,
-                                      width: 8,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
+                                  ),
+                                ),
+                                // Expense Line
+                                LineChartBarData(
+                                  spots: expenseSpots,
+                                  isCurved: true,
+                                  gradient: const LinearGradient(colors: [AppColors.danger, Color(0xFFFF8A80)]),
+                                  barWidth: 4,
+                                  isStrokeCapRound: true,
+                                  dotData: const FlDotData(show: false),
+                                  belowBarData: BarAreaData(
+                                    show: false,
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -758,7 +781,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
               
               const SizedBox(height: 24),
 
-              // Ngapain Aja Barusan
+              // Recent Activity
               FadeInSlide.delayed(
                 delay: const Duration(milliseconds: 600),
                 child: Column(
@@ -783,8 +806,19 @@ class _BerandaScreenState extends State<BerandaScreen> {
                             );
                           }
                           
-                          return Column(
-                            children: recent.map((t) => _buildRecentTransactionItem(t)).toList(),
+                          return AnimationLimiter(
+                            child: Column(
+                              children: AnimationConfiguration.toStaggeredList(
+                                duration: const Duration(milliseconds: 375),
+                                childAnimationBuilder: (widget) => SlideAnimation(
+                                  verticalOffset: 50.0,
+                                  child: FadeInAnimation(
+                                    child: widget,
+                                  ),
+                                ),
+                                children: recent.map((t) => _buildRecentTransactionItem(t)).toList(),
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -897,7 +931,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
         ),
         child: Column(
           children: [
-            // Ikon dua warna biar kece
+            // Dual-tone Icon
             Stack(
               alignment: Alignment.center,
               children: [
@@ -980,7 +1014,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
              }
          }
          
-         // Itung bulan yang udah dibayar
+         // Calculate prepaid months
          int paidMonthsAhead = 0;
          if (isLunas && _allIuran.isNotEmpty) {
              final now = DateTime.now();
@@ -988,14 +1022,11 @@ class _BerandaScreenState extends State<BerandaScreen> {
              int totalMustPay = _allIuran.fold(0, (sum, i) => sum + i.harga);
              
              if (totalMustPay > 0 && snapshot.hasData) {
-               // Cek setahun aja cukup
                for (int i = 0; i < 12; i++) {
                    String periodeStr = "${checkDate.month.toString().padLeft(2, '0')}-${checkDate.year}";
-                   
                    int amountPaidForMonth = snapshot.data!
                      .where((t) => t.periode == periodeStr && t.status == 'sukses' && t.tipe == 'pemasukan')
                      .fold(0, (sum, t) => sum + t.uang);
-                     
                    if (amountPaidForMonth >= totalMustPay) {
                      paidMonthsAhead++;
                      checkDate = DateTime(checkDate.year, checkDate.month + 1);
@@ -1006,99 +1037,139 @@ class _BerandaScreenState extends State<BerandaScreen> {
              }
          }
 
-         return Container(
-           padding: const EdgeInsets.all(24),
-           constraints: const BoxConstraints(minHeight: 200),
-           decoration: BoxDecoration(
-             gradient: AppTheme.meshGradient,
-             borderRadius: BorderRadius.circular(24),
-             boxShadow: AppTheme.glowShadow(Colors.blue),
-           ),
-           child: Column(
-             crossAxisAlignment: CrossAxisAlignment.start,
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-               const Row(
-                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                 children: [
-                   Text("Sisa Tagihan Bulan Ini", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                   Icon(Icons.credit_card, color: Colors.white30),
-                 ],
-               ),
-               const SizedBox(height: 12),
-               FittedBox(
-                 fit: BoxFit.scaleDown,
-                 alignment: Alignment.centerLeft,
-                 child: Text(
-                   isLunas 
-                     ? (paidMonthsAhead > 0 ? "Lunas (+${paidMonthsAhead} Bln)" : "Lunas 🎉")
-                     : Utils.formatCurrency(tagihanBelumLunas),
-                   style: const TextStyle(
-                     fontSize: 32,
-                     fontWeight: FontWeight.bold,
-                     color: Colors.white,
-                     letterSpacing: 1.0,
-                   ),
+          return Stack(
+            children: [
+              Container(
+                 padding: const EdgeInsets.all(24),
+                 constraints: const BoxConstraints(minHeight: 200),
+                 decoration: BoxDecoration(
+                   gradient: AppTheme.meshGradient,
+                   borderRadius: BorderRadius.circular(24),
+                   boxShadow: AppTheme.glowShadow(Colors.blue),
                  ),
-               ),
-               const SizedBox(height: 24),
-               Row(
-                 children: [
-                   Expanded(
-                     child: ElevatedButton(
-                       onPressed: () {
-                          if (isLunas) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const DetailKeuanganScreen()),
-                            );
-                          } else {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (_) => const UserMainScreen(initialIndex: 2)),
-                              (route) => false,
-                            );
-                          }
-                       },
-                       style: ElevatedButton.styleFrom(
-                         backgroundColor: Colors.white,
-                         disabledBackgroundColor: Colors.white.withValues(alpha: 0.3),
-                         foregroundColor: const Color(0xFF6C5CE7),
-                         disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
-                         elevation: 0,
-                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                         padding: const EdgeInsets.symmetric(vertical: 12),
-                       ),
-                       child: Text(
-                         isLunas ? "Lihat Detail" : "Bayar Sekarang", 
-                         style: const TextStyle(fontWeight: FontWeight.bold)
-                       ),
-                     ),
-                   ),
-                   const SizedBox(width: 12),
-                   Container(
-                     decoration: BoxDecoration(
-                       color: Colors.white.withValues(alpha: 0.2),
-                       borderRadius: BorderRadius.circular(12),
-                     ),
-                     child: IconButton(
-                       onPressed: () {
-                          // Pindah ke Riwayat
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (_) => const UserMainScreen(initialIndex: 1)),
-                            (route) => false,
-                          );
-                       },
-                       tooltip: "Riwayat Pembayaran",
-                       icon: const Icon(Icons.history, color: Colors.white),
-                     ),
-                   )
-                 ],
-               )
-             ],
-           ),
-         );
+                 child: Stack(
+                   children: [
+                      // Transparent decoration circles
+                      Positioned(
+                        top: -30, right: -30,
+                        child: Container(
+                          width: 100, height: 100,
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: -20, left: -20,
+                        child: Container(
+                          width: 80, height: 80,
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+                        ),
+                      ),
+                      
+                      // Content
+                      Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                       children: [
+                         const Row(
+                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                           children: [
+                             Text("Sisa Tagihan Bulan Ini", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                             Icon(Icons.credit_card, color: Colors.white30),
+                           ],
+                         ),
+                         const SizedBox(height: 12),
+                         FittedBox(
+                           fit: BoxFit.scaleDown,
+                           alignment: Alignment.centerLeft,
+                           child: Text(
+                             isLunas 
+                               ? (paidMonthsAhead > 0 ? "Lunas (+${paidMonthsAhead} Bln)" : "Lunas 🎉")
+                               : Utils.formatCurrency(tagihanBelumLunas),
+                             style: GoogleFonts.outfit(
+                               fontSize: 32,
+                               fontWeight: FontWeight.bold,
+                               color: Colors.white,
+                               letterSpacing: 1.0,
+                             ),
+                           ),
+                         ),
+                         const SizedBox(height: 24),
+                         Row(
+                           children: [
+                             Expanded(
+                               child: ElevatedButton(
+                                 onPressed: () {
+                                    if (isLunas) {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const DetailKeuanganScreen()));
+                                    } else {
+                                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const UserMainScreen(initialIndex: 2)), (r) => false);
+                                    }
+                                 },
+                                 style: ElevatedButton.styleFrom(
+                                   backgroundColor: Colors.white,
+                                   foregroundColor: const Color(0xFF6C5CE7),
+                                   elevation: 0,
+                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                   padding: const EdgeInsets.symmetric(vertical: 12),
+                                 ),
+                                 child: Text(isLunas ? "Lihat Detail" : "Bayar Sekarang", style: const TextStyle(fontWeight: FontWeight.bold)),
+                               ),
+                             ),
+                             const SizedBox(width: 12),
+                             Container(
+                               decoration: BoxDecoration(
+                                 color: Colors.white.withValues(alpha: 0.2),
+                                 borderRadius: BorderRadius.circular(12),
+                               ),
+                               child: IconButton(
+                                 onPressed: () => Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const UserMainScreen(initialIndex: 1)), (r) => false),
+                                 tooltip: "Riwayat Pembayaran",
+                                 icon: const Icon(Icons.history, color: Colors.white),
+                               ),
+                             )
+                           ],
+                         )
+                       ],
+                      ),
+                   ],
+                 ),
+              ),
+              
+              // Liquid Surface Overlay (Wet Look)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.5), // High Gloss Start
+                            Colors.white.withValues(alpha: 0.0), // Clear Center
+                            Colors.white.withValues(alpha: 0.0),
+                            Colors.white.withValues(alpha: 0.1), // Subtle Reflection End
+                          ],
+                          stops: const [0.0, 0.4, 0.6, 1.0],
+                        ),
+                        boxShadow: [
+                           BoxShadow(
+                             color: Colors.white.withValues(alpha: 0.1),
+                             offset: const Offset(-1, -1),
+                             blurRadius: 2,
+                             spreadRadius: 0
+                           )
+                        ]
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
       }
     );
   }
@@ -1200,10 +1271,10 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
           final allTrans = snapshot.data!;
 
 
-          // Saring transaksi biar ga pusing
+          // Filter transactions for better visibility
           var filteredTrans = allTrans;
           
-          // Cari Apa Hayoo?
+          // Search Logic
           if (_searchQuery.isNotEmpty) {
             final query = _searchQuery.toLowerCase();
             filteredTrans = filteredTrans.where((t) {
@@ -1236,7 +1307,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
           final int totalCount = filteredTrans.length;
           final int totalAmount = filteredTrans.fold(0, (sum, t) => sum + t.uang);
 
-          // Kelompokin tanggal biar rapi
+          // Group by date
           Map<String, List<TransaksiModel>> groupedByDate = {};
           final now = DateTime.now();
           final today = DateTime(now.year, now.month, now.day);
@@ -1263,7 +1334,7 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
             groupedByDate[label]!.add(t);
           }
           
-          // Urutin biar enak dibaca
+          // Sort for readability
           final sortedKeys = groupedByDate.keys.toList();
           sortedKeys.sort((a, b) {
             const order = ['Hari Ini', 'Kemarin', 'Minggu Ini'];
@@ -2006,7 +2077,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Upload Bukti Biar Percaya
+      // Upload Proof of Payment
       String? buktiUrl;
       final supabase = SupabaseService();
       

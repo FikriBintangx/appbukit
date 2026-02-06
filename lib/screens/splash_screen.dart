@@ -138,7 +138,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
-                    color: colorScheme.onBackground,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 48),

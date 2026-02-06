@@ -8,7 +8,7 @@ import 'package:tiara_fin/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:tiara_fin/screens/splash_screen.dart';
 
-/// Urusin pesan pas aplikasi lagi tidur (harus top-level biar ga error)
+/// Handle background messages (must be top-level)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -18,7 +18,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Gaspol refresh rate biar licin (60-120Hz)
+  // Enable High Refresh Rate (60-120Hz)
   await _enableHighRefreshRate();
 
   // Jaga-jaga kalo pas nyala malah meledak
@@ -47,7 +47,7 @@ void main() async {
   }
 }
 
-/// Helper buat aktifin High Refresh Rate (biar smooth kek jalan tol)
+/// Helper to enable High Refresh Rate
 Future<void> _enableHighRefreshRate() async {
   try {
     // Set FPS mentok kanan buat device sultan
@@ -59,7 +59,7 @@ Future<void> _enableHighRefreshRate() async {
     // Layar full sampe mentok
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-    // Warna status bar transparan biar kece
+    // Transparent Status Bar
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,

@@ -28,7 +28,7 @@ class AppColors {
   static const purple = Color(0xFFAF52DE);
 }
 
-// --- MODEL TAMBAHAN BIAR GANTENG ---
+// --- ADDITIONAL MODELS ---
 
 class NotificationModel {
   final String id;
@@ -88,7 +88,7 @@ class Utils {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  /// Tanggal plus jam, biar gak telat
+  /// Date and Time
   static String formatDateTime(DateTime date) {
     return '${formatDate(date)} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
@@ -853,7 +853,7 @@ class FirestoreService {
           .map((doc) => ForumModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
       
-      // Urutin di HP aja biar server ga ngos-ngosan
+      // Client-side sorting
       docs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return docs;
     });
@@ -925,7 +925,7 @@ class FirestoreService {
     required String type,
     required String targetRole,
   }) async {
-    // 1. Simpen di Firestore biar muncul di list
+    // 1. Save to Firestore
     await _db.collection('notifications').add({
       'title': title,
       'body': body,
@@ -970,31 +970,64 @@ class FirestoreService {
 // --- TUKANG CETAK PDF ---
 
 class PdfService {
-  Future<void> exportLaporanBulanan(List<TransaksiModel> transaksiList, {String filterStatus = 'sukses'}) async {
+  Future<void> exportLaporan(
+    List<TransaksiModel> transaksiList, {
+    String filterStatus = 'sukses',
+    String filterType = 'semua',
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     final pdf = pw.Document();
-
-    // Ambil data bulan ini doang
-    final now = DateTime.now();
     
     // Filter logic
     final list = transaksiList.where((t) {
-      final sameMonth = t.timestamp.month == now.month && t.timestamp.year == now.year;
-      if (!sameMonth) return false;
-      
-      if (filterStatus == 'semua') return true;
-      return t.status == filterStatus;
+      // 1. Filter Date (if provided)
+      if (startDate != null && endDate != null) {
+        final start = DateTime(startDate.year, startDate.month, startDate.day);
+        final end = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+        
+        if (t.timestamp.isBefore(start) || t.timestamp.isAfter(end)) {
+          return false;
+        }
+      }
+
+      // 2. Filter Status
+      if (filterStatus != 'semua' && t.status != filterStatus) {
+        return false;
+      }
+
+      // 3. Filter Type
+      if (filterType != 'semua' && t.tipe != filterType) {
+        return false;
+      }
+
+      return true;
     }).toList();
 
+    // Sort by date newest first
+    list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
     final totalMasuk = list
-        .where((t) => t.tipe == 'pemasukan' && t.status == 'sukses') // Only count sukses as actual money
+        .where((t) => t.tipe == 'pemasukan' && t.status == 'sukses')
         .fold(0, (sum, t) => sum + t.uang);
     final totalKeluar = list
-        .where((t) => t.tipe == 'pengeluaran' && t.status == 'sukses') // Only count sukses as actual spent
+        .where((t) => t.tipe == 'pengeluaran' && t.status == 'sukses')
         .fold(0, (sum, t) => sum + t.uang);
 
     String titleSuffix = "";
-    if (filterStatus != 'semua') {
-       titleSuffix = " (${filterStatus.toUpperCase()})";
+    List<String> filters = [];
+    if (filterType != 'semua') filters.add(filterType.toUpperCase());
+    if (filterStatus != 'semua') filters.add(filterStatus.toUpperCase());
+    
+    if (filters.isNotEmpty) {
+       titleSuffix = " (${filters.join(' - ')})";
+    }
+
+    String datePeriod = "Semua Waktu";
+    if (startDate != null && endDate != null) {
+      datePeriod = "${Utils.formatDate(startDate)} - ${Utils.formatDate(endDate)}";
+    } else {
+       datePeriod = "Dicetak: ${Utils.formatDate(DateTime.now())}";
     }
 
     pdf.addPage(
@@ -1008,18 +1041,30 @@ class PdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                    pw.Expanded(
-                    child: pw.Text(
-                      'Laporan Keuangan$titleSuffix',
-                      style: pw.TextStyle(
-                        fontSize: 24,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'Laporan Keuangan$titleSuffix',
+                          style: pw.TextStyle(
+                            fontSize: 24,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.Text(
+                          datePeriod,
+                          style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                        ),
+                      ],
                     ),
                   ),
-                  pw.Text(
-                    Utils.formatDate(now),
-                    style: const pw.TextStyle(fontSize: 14),
-                  ),
+                  pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                          pw.Text("RT/RW App", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                          pw.Text("Laporan Resmi", style: const pw.TextStyle(fontSize: 10)),
+                      ]
+                  )
                 ],
               ),
             ),
@@ -1046,10 +1091,13 @@ class PdfService {
             ),
             pw.SizedBox(height: 30),
             pw.Text(
-              'Rincian Transaksi',
+              'Rincian Transaksi (${list.length})',
               style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
+            if (list.isEmpty)
+                pw.Center(child: pw.Text("Tidak ada data transaksi untuk periode ini.", style: const pw.TextStyle(color: PdfColors.grey)))
+            else
             pw.Table.fromTextArray(
               headers: ['Tanggal', 'User/Ket', 'Tipe', 'Nominal'],
               data: list
@@ -1104,7 +1152,7 @@ class PdfService {
     );
   }
 
-  /// Bikin kwitansi PDF biar sah
+  /// Generate PDF Receipt
   Future<void> generateKwitansiPDF(TransaksiModel transaksi, String iuranName) async {
     final pdf = pw.Document();
 
@@ -1307,7 +1355,7 @@ class AuthService {
           .get();
       if (query.docs.isNotEmpty) return "Email sudah terdaftar";
 
-      // Acak-acak password biar aman
+      // Hash password
       final hashedPassword = SecurityUtils.hashPassword(password);
 
       await _db.collection('users').add({

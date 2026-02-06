@@ -53,7 +53,7 @@ class _PengaduanScreenState extends State<PengaduanScreen> {
           }
 
           var docs = snapshot.data!.docs;
-          // Kita urutin di HP aja biar gak ribet setting Index Firebase
+          // Sort locally to avoid extra Firebase Indexing configuration
           docs.sort((a, b) {
             Timestamp tA = a['created_at'] as Timestamp;
             Timestamp tB = b['created_at'] as Timestamp;

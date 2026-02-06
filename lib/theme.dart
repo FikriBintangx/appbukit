@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:google_fonts/google_fonts.dart';
+
 class AppTheme {
   // Colors
   static const primary = Color(0xFF00D09C); // Emerald Green / Teal
@@ -47,20 +49,20 @@ class AppTheme {
   ];
 
   // Text Styles
-  static const TextStyle header1 = TextStyle(
+  static TextStyle get header1 => GoogleFonts.outfit(
     fontSize: 24,
     fontWeight: FontWeight.bold,
     color: textMain,
     letterSpacing: -0.5,
   );
   
-  static const TextStyle title = TextStyle(
+  static TextStyle get title => GoogleFonts.outfit(
     fontSize: 18,
     fontWeight: FontWeight.w600,
     color: textMain,
   );
   
-  static const TextStyle body = TextStyle(
+  static TextStyle get body => GoogleFonts.poppins(
     fontSize: 14,
     color: textSecondary,
     height: 1.5,
